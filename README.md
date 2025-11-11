@@ -1,5 +1,5 @@
 # AI 수학 튜터 (AI Math Tutor)
-
+### 구현: [링크](https://delicate-bubblegum-7f4517.netlify.app/)
 이 프로젝트는 Vue 3와 Google Gemini API를 사용하여 구축된 간단한 웹 애플리케이션입니다. 사용자가 원하는 유형과 난이도의 수학 문제를 AI에게 요청하고, 캔버스에 직접 손으로 쓴 풀이를 제출하면 AI가 이를 분석하여 상세한 피드백을 제공합니다.
 
 ## 주요 기능

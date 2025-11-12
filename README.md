@@ -22,13 +22,52 @@ API 키 준비:
 
 Google AI Studio (또는 Google Cloud)에서 Gemini API 사용을 위한 API 키를 발급받습니다.
 
+# 🚀 Google Gemini API 키 발급 가이드
+
+이 문서는 Google AI Studio를 통해 Gemini API (Generative Language API) 무료 티어 키를 발급받는 과정을 안내합니다.
+
+---
+
+## 📋 준비물
+
+* **Google 계정**: API 키를 발급받기 위해서는 Google 계정이 필요합니다.
+
+---
+
+## 👣 발급 단계
+
+1.  **Google AI Studio 접속**
+    * 웹 브라우저에서 [Google AI Studio](https://aistudio.google.com/) 사이트로 이동합니다.
+
+2.  **로그인**
+    * 가지고 있는 Google 계정으로 로그인합니다.
+    * 서비스 약관이 나타나면 동의하고 계속 진행합니다.
+
+3.  **API 키 생성 메뉴 이동**
+    * 로그인 후, Google AI Studio 대시보드에 접근하게 됩니다.
+    * 화면 왼쪽 메뉴에서 **`Get API key`** (API 키 받기)를 클릭합니다.
+
+    
+
+4.  **새 프로젝트 생성 (또는 기존 프로젝트 사용)**
+    * API 키는 'Google Cloud Project'와 연결되어야 합니다.
+    * **`Create API key in new project`** (새 프로젝트에 API 키 만들기) 버튼을 클릭합니다.
+    * (참고: 기존에 생성한 Google Cloud 프로젝트가 있다면 해당 프로젝트를 선택할 수도 있습니다.)
+
+5.  **API 키 생성 및 복사**
+    * 버튼을 클릭하면 잠시 후 API 키가 생성되어 화면에 긴 문자열 형태로 나타납니다.
+    * 이 문자열이 바로 사용자의 **Gemini API 키**입니다.
+    * **복사(Copy)** 버튼을 클릭하여 키를 안전한 곳에 즉시 복사해 둡니다.
+
+    > ****
+
 API 키 입력:
 
 애플리케이션 상단의 'Google AI API Key' 입력란에 발급받은 키를 붙여넣습니다. (키는 브라우저에만 저장됩니다.)
 
 문제 받기:
 
-'문제 유형'을 입력하고 '난이도'를 선택합니다.
+'문제 유형'을 선택하고 '난이도'를 선택합니다.
 
 새로운 문제 받기 버튼을 클릭하면 AI가 조건에 맞는 문제를 출제합니다.
 

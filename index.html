@@ -3,580 +3,871 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 수학 문제 풀이</title>
+    <title>AI 수학 튜터 (Vue 3)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Vue 3 CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <!-- Inter 폰트 (Tailwind 기본 폰트) -->
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-    
-    <!-- MathJax (수학 수식 렌더링) CDN 추가 -->
+    <!-- MathJax CDN: LaTeX 수식 렌더링을 위함 -->
     <script>
-        window.MathJax = {
-          tex: {
-            inlineMath: [['$', '$'], ['\\(', '\\)']],
-            displayMath: [['$$', '$$'], ['\\[', '\\]']]
-          },
-          svg: {
-            fontCache: 'global'
-          }
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']], // 인라인 수식 $...$
+                displayMath: [['$$', '$$'], ['\\[', '\\]']] // 디스플레이 수식 $$...$$
+            },
+            svg: {
+                fontCache: 'global'
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                    // Vue 앱이 마운트된 후 MathJax를 실행할 수 있도록 이벤트를 생성합니다.
+                    document.dispatchEvent(new Event('MathJaxReady'));
+                }
+            }
         };
     </script>
     <script type="text/javascript" id="MathJax-script" async
-      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
     </script>
-    
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        /* 간단한 로딩 스피너 */
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 32px;
-            height: 32px;
+        /* 기본 폰트 설정 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* 캔버스 스타일 */
+        #handwriting-canvas {
+            touch-action: none; /* 모바일에서 그릴 때 화면 스크롤 방지 */
+            cursor: crosshair; /* 그리기 커서 */
+            height: 400px; /* [수정] 캔버스 초기 높이를 CSS에서 명시적으로 지정 */
+        }
+        /* 선택된 툴 버튼 스타일 */
+        .tool-btn.active {
+            background-color: #2563eb; /* bg-blue-600 */
+            color: white;
+            border-color: #2563eb; /* border-blue-600 */
+        }
+        /* Tailwind CSS v-cloak 대체 스타일 */
+        [v-cloak] {
+            display: none;
+        }
+        /* 로딩 스피너 스타일 */
+        .spinner {
+            border-top-color: #3498db;
             animation: spin 1s linear infinite;
         }
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
-        /* 캔버스 스타일 */
-        canvas {
-            touch-action: none; /* 모바일에서 그릴 때 페이지 스크롤 방지 */
-            width: 100%;
-            height: auto;
+        /* 객관식 보기 라디오 버튼 숨기기 */
+        .choice-radio {
+            display: none;
         }
-        /* 활성 도구 스타일 */
-        .tool-btn.active {
-            @apply ring-2 ring-blue-500 bg-blue-100;
+        
+        /* 객관식 보기 커스텀 스타일 */
+        .choice-label {
+            display: flex; /* 한 줄 정렬을 위해 flex 사용 */
+            align-items: center; /* 세로 중앙 정렬 */
+            padding: 1rem;
+            border: 1px solid #d1d5db; /* border-gray-300 */
+            border-radius: 0.5rem; /* rounded-lg */
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .choice-label:hover {
+            border-color: #3b82f6; /* border-blue-500 */
+        }
+        
+        /* 객관식 보기 번호 (원형) */
+        .choice-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.75rem; /* 28px */
+            height: 1.75rem; /* 28px */
+            border-radius: 9999px; /* full circle */
+            background-color: #e5e7eb; /* bg-gray-200 */
+            color: #374151; /* text-gray-700 */
+            font-weight: 600; /* semibold */
+            margin-right: 0.75rem; /* mr-3 */
+            flex-shrink: 0; /* 크기 고정 (줄바꿈 방지) */
+            transition: all 0.2s ease;
+        }
+        
+        /* 선택된 객관식 보기 스타일 */
+        .choice-radio:checked + .choice-label {
+            border-color: #2563eb; /* border-blue-600 */
+            background-color: #eff6ff; /* bg-blue-50 */
+            border-width: 2px;
+        }
+        /* 선택 시 원형 번호 스타일 변경 */
+        .choice-radio:checked + .choice-label .choice-number {
+            background-color: #2563eb; /* bg-blue-600 */
+            color: white;
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
-    
-    <div id="app" class="w-full max-w-3xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-10 space-y-8">
-        
-        <header class="text-center">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-800">AI 수학 튜터</h1>
-            <p class="text-gray-600 mt-2">AI가 출제한 수학 문제를 풀고, 필기 답안을 제출하여 피드백을 받아보세요.</p>
-        </header>
+<body class="bg-gray-50 min-h-screen p-4 md:p-8">
 
+<div id="app" v-cloak class="max-w-7xl mx-auto bg-white p-6 md:p-10 rounded-2xl shadow-lg">
+
+    <h1 class="text-3xl md:text-4xl font-bold text-center text-blue-700 mb-8">AI 수학 튜터</h1>
+
+    <!-- 1. API 키 입력 및 문제 설정 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <!-- API 키 입력 -->
-        <div class="space-y-2">
-            <label for="apiKey" class="block font-medium text-gray-700">Google AI API Key:</label>
-            <input type="password" id="apiKey" v-model="apiKey" placeholder="여기에 API 키를 입력하세요"
-                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
-            <p class="text-sm text-gray-500">API 키는 브라우저에만 저장되며 서버로 전송되지 않습니다.</p>
+        <div class="md:col-span-1">
+            <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-2">Google AI API Key</label>
+            <input type="password" id="apiKey" v-model="apiKey" placeholder="AI-..."
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
+                   autocomplete="current-password">
         </div>
 
-        <!-- 1. 문제 출제 섹션 -->
-        <section class="space-y-4">
-            <h2 class="text-2xl font-semibold text-gray-800 border-b pb-2">1. 오늘의 문제</h2>
-
-            <!-- 문제 유형 및 난이도 입력 -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label for="problemType" class="block font-medium text-gray-700">문제 유형:</label>
-                    <input type="text" id="problemType" v-model="problemType" placeholder="예: 미적분, 이차함수..."
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
-                </div>
-                <div>
-                    <label for="difficulty" class="block font-medium text-gray-700">난이도 (1-5):</label>
-                    <select id="difficulty" v-model.number="difficultyLevel"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white">
-                        <option value="1">1 (쉬움)</option>
-                        <option value="2">2</option>
-                        <option value="3">3 (보통)</option>
-                        <option value="4">4</option>
-                        <option value="5">5 (어려움)</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="flex justify-center">
-                <button @click="getMathProblem" :disabled="isLoadingProblem || !apiKey"
-                        class="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    <span vif="!isLoadingProblem">새로운 문제 받기</span>
-                    <span v-else class="flex items-center space-x-2">
-                        <span class="loader !w-5 !h-5 !border-2 !border-t-white"></span>
-                        <span>출제 중...</span>
-                    </span>
-                </button>
-            </div>
-            
-            <div v-if="mathProblem" 
-                 id="math-problem-display"
-                 class="p-6 bg-gray-50 border border-gray-200 rounded-lg shadow-inner min-h-[100px] text-lg text-gray-800"
-                 v-html="mathProblem">
-                <!-- v-html을 사용하여 LaTeX 렌더링을 준비. 내용은 watch에서 처리 -->
-            </div>
-            <div v-if="!mathProblem && !isLoadingProblem" class="text-center text-gray-500 p-4">
-                버튼을 눌러 수학 문제를 받아보세요.
-            </div>
-        </section>
-
-        <!-- 2. 답안 제출 섹션 (캔버스) -->
-        <section class="space-y-4">
-            <h2 class="text-2xl font-semibold text-gray-800 border-b pb-2">2. 답안 필기</h2>
-            <p class="text-gray-600">아래 영역에 풀이 과정을 직접 필기하세요. (PC/모바일/태블릿 지원)</p>
-            
-            <!-- 캔버스 도구 모음 -->
-            <div class="flex flex-wrap gap-2 justify-center p-2 bg-gray-100 rounded-lg">
-                <button @click="setTool('pen-black')" class="tool-btn px-4 py-2 rounded-lg" :class="{'active': currentTool === 'pen-black'}">
-                    펜 (검정)
-                </button>
-                <button @click="setTool('pen-red')" class="tool-btn px-4 py-2 rounded-lg" :class="{'active': currentTool === 'pen-red'}">
-                    펜 (빨강)
-                </button>
-                <button @click="setTool('eraser')" class="tool-btn px-4 py-2 rounded-lg" :class="{'active': currentTool === 'eraser'}">
-                    지우개
-                </button>
-                <button @click="clearCanvas" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                    전체 삭제
-                </button>
-                <button @click="increaseHeight" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors">
-                    필기 영역 늘리기
-                </button>
-            </div>
-
-            <!-- 캔버스 -->
-            <div class="border-2 border-gray-300 rounded-lg overflow-hidden">
-                <canvas 
-                    ref="canvasRef"
-                    :width="canvasWidth"
-                    :height="canvasHeight"
-                    class="bg-white"
-                    @mousedown="startDrawing"
-                    @mousemove="draw"
-                    @mouseup="stopDrawing"
-                    @mouseout="stopDrawing"
-                    @touchstart.prevent="startDrawing"
-                    @touchmove.prevent="draw"
-                    @touchend="stopDrawing"
-                ></canvas>
-            </div>
-        </section>
-
-        <!-- 3. 피드백 받기 섹션 -->
-        <section class="space-y-4">
-            <h2 class="text-2xl font-semibold text-gray-800 border-b pb-2">3. AI 피드백</h2>
-            <div class="flex justify-center">
-                <button @click="getFeedback" :disabled="isLoadingFeedback || !mathProblem || !apiKey"
-                        class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    <span v-if="!isLoadingFeedback">피드백 받기</span>
-                    <span v-else class="flex items-center space-x-2">
-                        <span class="loader !w-5 !h-5 !border-2 !border-t-white"></span>
-                        <span>분석 중...</span>
-                    </span>
-                </button>
-            </div>
-
-            <div v-if="feedback" 
-                 id="feedback-display"
-                 class="p-6 bg-blue-50 border border-blue-200 rounded-lg shadow-inner min-h-[100px]"
-                 v-html="feedback">
-                 <!-- v-html을 사용하여 LaTeX 렌더링을 준비. 내용은 watch에서 처리 -->
-            </div>
-            <div v-if="!feedback && !isLoadingFeedback" class="text-center text-gray-500 p-4">
-                답안을 제출하고 피드백을 받아보세요.
-            </div>
-        </section>
-
-        <!-- 에러 메시지 -->
-        <div v-if="error" class="p-4 bg-red-100 border border-red-300 text-red-800 rounded-lg shadow">
-            <h4 class="font-bold">오류 발생:</h4>
-            <p class="whitespace-pre-wrap">{{ error }}</p>
+        <!-- 문제 유형 선택 -->
+        <div class="md:col-span-1">
+            <label for="problemType" class="block text-sm font-medium text-gray-700 mb-2">문제 유형 (성취 기준)</label>
+            <select id="problemType" v-model="problemType"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white">
+                <optgroup label="(2) 집합과 명제">
+                    <option value="[10공수2-02-01] 집합의 개념을 이해하고, 집합을 표현할 수 있다.">[10공수2-02-01] 집합의 개념과 표현</option>
+                    <option value="[10공수2-02-02] 두 집합 사이의 포함관계를 판단할 수 있다.">[10공수2-02-02] 집합의 포함관계</option>
+                    <option value="[10공수2-02-03] 집합의 연산을 수행하고, 벤 다이어그램을 이용하여 나타낼 수 있다.">[10공수2-02-03] 집합의 연산 (벤 다이어그램)</option>
+                    <option value="[10공수2-02-04] 명제와 조건의 뜻을 알고, ‘모든’, ‘어떤’을 포함한 명제를 이해하고 설명할 수 있다.">[10공수2-02-04] 명제와 조건 (모든, 어떤)</option>
+                    <option value="[10공수2-02-05] 명제의 역과 대우를 이해하고 설명할 수 있다.">[10공수2-02-05] 명제의 역과 대우</option>
+                    <option value="[10공수2-02-06] 충분조건과 필요조건을 이해하고 판단할 수 있다.">[10공수2-02-06] 충분조건과 필요조건</option>
+                    <option value="[10공수2-02-07] 대우를 이용한 증명법과 귀류법을 이해하고 관련된 명제를 증명할 수 있다.">[10공수2-02-07] 증명법 (대우, 귀류법)</option>
+                    <option value="[10공수2-02-08] 절대부등식의 뜻을 알고, 간단한 절대부등식을 증명할 수 있다.">[10공수2-02-08] 절대부등식</option>
+                </optgroup>
+                <optgroup label="(3) 함수와 그래프">
+                    <option value="[10공수2-03-01] 함수의 개념을 설명하고, 그 그래프를 이해한다.">[10공수2-03-01] 함수의 개념과 그래프</option>
+                    <option value="[10공수2-03-02] 함수의 합성을 설명하고, 합성함수를 구할 수 있다.">[10공수2-03-02] 합성함수</option>
+                    <option value="[10공수2-03-03] 역함수의 개념을 설명하고, 역함수를 구할 수 있다.">[10공수2-03-03] 역함수</option>
+                    <option value="[10공수2-03-04] 유리함수 y = (ax+b)/(cx+d) 의 그래프를 그릴 수 있고, 그 그래프의 성질을 탐구할 수 있다.">[10공수2-03-04] 유리함수와 그래프</option>
+                    <option value="[10공수2-03-05] 무리함수 y = sqrt(ax+b)+c 의 그래프를 그릴 수 있고, 그 그래프의 성질을 탐구할 수 있다.">[10공수2-03-05] 무리함수와 그래프</option>
+                </optgroup>
+            </select>
         </div>
 
+        <!-- 난이도 선택 -->
+        <div class="md:col-span-1">
+            <label for="difficulty" class="block text-sm font-medium text-gray-700 mb-2">난이도 (1~5)</label>
+            <select id="difficulty" v-model.number="difficultyLevel"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition bg-white">
+                <option value="1">1 (매우 쉬움)</option>
+                <option value="2">2 (쉬움)</option>
+                <option value="3">3 (보통)</option>
+                <option value="4">4 (어려움)</option>
+                <option value="5">5 (매우 어려움)</option>
+            </select>
+        </div>
     </div>
 
-    <script type="module">
-        const { createApp, ref, onMounted, nextTick, watch } = Vue; // 'watch' 추가
+    <!-- 새로운 문제 받기 버튼 -->
+    <button @click="getMathProblem" :disabled="isLoadingProblem || !apiKey"
+            class="w-full mb-8 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-300 ease-in-out flex items-center justify-center">
+        <svg v-if="isLoadingProblem" class="spinner w-5 h-5 mr-3" viewBox="0 0 50 50">
+            <circle class="opacity-25" cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4"></circle>
+            <circle class="opacity-75" cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4"
+                    stroke-dasharray="31.41592653589793 31.41592653589793"
+                    stroke-dashoffset="31.41592653589793"></circle>
+        </svg>
+        <span>{{ isLoadingProblem ? '문제 생성 중...' : '새로운 문제 받기' }}</span>
+    </button>
 
-        createApp({
-            setup() {
-                // 상태 변수들
-                const apiKey = ref('');
-                const mathProblem = ref('');
-                const feedback = ref('');
-                const isLoadingProblem = ref(false);
-                const isLoadingFeedback = ref(false);
-                const error = ref('');
+    <!-- 오류 메시지 표시 -->
+    <div v-if="errorMessage" class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg" role="alert">
+        <span class="font-bold">오류 발생:</span>
+        <span class="block sm:inline">{{ errorMessage }}</span>
+    </div>
 
-                // 문제 출제 옵션
-                const problemType = ref('고등 미적분'); // 기본값
-                const difficultyLevel = ref(3); // 기본값
+    <!-- 1. 오늘의 문제 -->
+    <div class="mb-8 p-6 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px]">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4">1. 오늘의 문제</h2>
+        <!-- 문제가 있을 때만 내용을 표시 -->
+        <div v-if="mathProblem">
+            <!-- [수정] 줄바꿈 문제 해결을 위해 whitespace-pre-wrap 대신 break-words 사용 -->
+            <div v-html="mathProblem.problemText" class="text-base text-gray-700 leading-relaxed break-words"></div>
+            <!-- 5지선다형 객관식 보기 -->
+            <div class="mt-6 space-y-3" v-if="mathProblem.options && mathProblem.options.length === 5">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">객관식 선택:</h3>
+                <div v-for="(option, index) in mathProblem.options" :key="index">
+                    <input type="radio" :id="'choice-' + index" :value="index" v-model="selectedOptionIndex" class="choice-radio">
+                    <label :for="'choice-' + index" class="choice-label">
+                        <!-- [수정] 원형 번호 추가 -->
+                        <span class="choice-number">{{ index + 1 }}</span>
+                        <!-- [수정] min-w-0: flex 컨테이너 내에서 텍스트가 줄바꿈되도록 함 -->
+                        <span v-html="option" class="break-words min-w-0"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <!-- 문제가 없을 때 안내 메시지 -->
+        <div v-else class="text-gray-500">
+            '새로운 문제 받기' 버튼을 눌러주세요.
+        </div>
+    </div>
 
-                // 캔버스 관련 상태
-                const canvasRef = ref(null);
-                const ctxRef = ref(null);
-                const isDrawing = ref(false);
-                const canvasWidth = ref(700); // 캔버스 내부 해상도 너비
-                const canvasHeight = ref(400); // 캔버스 내부 해상도 높이 (반응형으로 증가)
-                const currentTool = ref('pen-black');
-                const lastPos = ref({ x: 0, y: 0 });
+    <!-- 2. 답안 필기 -->
+    <div class="mb-8">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4">2. 답안 필기</h2>
+        <!-- 캔버스 도구 모음 -->
+        <div class="flex flex-wrap gap-2 mb-3 p-3 bg-gray-100 rounded-lg">
+            <button @click="setTool('pen', 'black')" :class="{'active': currentTool === 'pen' && penColor === 'black'}"
+                    class="tool-btn px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition">
+                펜 (검정)
+            </button>
+            <button @click="setTool('pen', 'red')" :class="{'active': currentTool === 'pen' && penColor === 'red'}"
+                    class="tool-btn px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition">
+                펜 (빨강)
+            </button>
+            <button @click="setTool('eraser')" :class="{'active': currentTool === 'eraser'}"
+                    class="tool-btn px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition">
+                지우개
+            </button>
+            <button @click="clearCanvas"
+                    class="px-4 py-2 bg-red-500 text-white rounded-lg shadow-sm hover:bg-red-600 transition ml-auto">
+                전체 삭제
+            </button>
+            <button @click="extendCanvas"
+                    class="px-4 py-2 bg-green-500 text-white rounded-lg shadow-sm hover:bg-green-600 transition">
+                필기 영역 늘리기
+            </button>
+        </div>
 
-                // Gemini API 기본 URL
-                const API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=";
+        <!-- [수정] w-full 클래스로 너비 100% 설정 -->
+        <canvas id="handwriting-canvas" ref="canvas" class="w-full bg-white border-2 border-gray-300 rounded-lg shadow-inner"></canvas>
+    </div>
 
-                // 캔버스 초기화
-                onMounted(() => {
-                    const canvas = canvasRef.value;
-                    if (!canvas) return;
+    <!-- 3. AI 피드백 -->
+    <div class="mb-8">
+        <!-- 피드백 받기 버튼 -->
+        <button @click="getFeedback" :disabled="isLoadingFeedback || !apiKey || !mathProblem"
+                class="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-300 ease-in-out flex items-center justify-center">
+            <svg v-if="isLoadingFeedback" class="spinner w-5 h-5 mr-3" viewBox="0 0 50 50">
+                <circle class="opacity-25" cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4"></circle>
+                <circle class="opacity-75" cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4"
+                        stroke-dasharray="31.41592653589793 31.41592653589793"
+                        stroke-dashoffset="31.41592653589793"></circle>
+            </svg>
+            <!-- [수정] v-if가 아닌 v-else-if 사용 -->
+            <span v-if="!mathProblem">문제를 먼저 받아주세요</span>
+            <span v-else-if="isLoadingFeedback">AI가 채점 중입니다...</span>
+            <span v-else>피드백 받기</span>
+        </button>
 
-                    // 캔버스 해상도를 부모 너비에 맞게 설정 (스타일은 100%로 조절됨)
-                    const containerWidth = canvas.parentElement.clientWidth;
-                    canvasWidth.value = containerWidth > 0 ? containerWidth : 700;
-                    
-                    ctxRef.value = canvas.getContext('2d');
-                    ctxRef.value.lineCap = 'round';
-                    ctxRef.value.lineJoin = 'round';
-                    setTool('pen-black'); // 기본 도구 설정
-                });
+        <!-- CSV 내보내기 버튼 -->
+        <div class="mt-4 text-center">
+            <button @click="exportToCSV" :disabled="analysisData.length === 0"
+                    class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-gray-700 disabled:bg-gray-300 transition">
+                분석 데이터 내보내기 (CSV)
+            </button>
+            <p class="text-xs text-gray-500 mt-1">
+                현재까지 저장된 풀이 기록: {{ analysisData.length }}개
+            </p>
+        </div>
 
-                // MathJax 렌더링을 위한 헬퍼 함수
-                function renderMath(elementId) {
-                    nextTick(() => {
-                        const element = document.getElementById(elementId);
-                        if (element && window.MathJax) {
-                            window.MathJax.typesetClear([element]);
-                            window.MathJax.typesetPromise([element]).catch((err) => console.log('MathJax Typeset Error:', err));
-                        }
-                    });
+        <!-- 피드백 결과 표시 -->
+        <div v-if="feedback" class="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">3. AI 튜터의 피드백</h2>
+            <!-- [수정] 줄바꿈 문제 해결을 위해 whitespace-pre-wrap 대신 break-words 사용 -->
+            <div v-html="feedback" class="text-base text-gray-700 leading-relaxed break-words"></div>
+        </div>
+    </div>
+
+
+</div> <!-- end of #app -->
+
+<script type="module">
+    // Vue 3 Composition API를 사용합니다.
+    const { createApp, ref, onMounted, watch, nextTick } = Vue;
+
+    createApp({
+        setup() {
+            // --- 상태 변수 정의 (ref) ---
+
+            // API 및 로딩 상태
+            // localStorage에서 API 키를 불러옵니다. 없으면 빈 문자열로 초기화합니다.
+            const apiKey = ref(localStorage.getItem('geminiApiKey') || ''); 
+            const isLoadingProblem = ref(false); // 문제 로딩 상태 (true면 스피너 표시)
+            const isLoadingFeedback = ref(false); // 피드백 로딩 상태
+            const errorMessage = ref(''); // API 오류나 유효성 검사 실패 시 메시지
+
+            // 문제 관련 상태
+            // '문제 유형' 드롭다운의 기본 선택값
+            const problemType = ref('[10공수2-02-01] 집합의 개념을 이해하고, 집합을 표현할 수 있다.'); 
+            const difficultyLevel = ref(3); // '난이도' 드롭다운의 기본 선택값 (3: 보통)
+            // AI로부터 받은 문제 객체 (JSON 파싱됨). null이면 '문제를 받아주세요'가 표시됨
+            const mathProblem = ref(null); 
+            // 사용자가 선택한 객관식 답의 인덱스 (0~4). null이면 선택 안 함
+            const selectedOptionIndex = ref(null); 
+
+            // 캔버스 관련 상태
+            const canvas = ref(null); // <canvas> 엘리먼트에 연결될 ref
+            const ctx = ref(null); // 캔버스의 2D 렌더링 컨텍스트 (실제 그림을 그리는 객체)
+            const isDrawing = ref(false); // 마우스/터치가 눌린 상태인지 여부
+            const currentTool = ref('pen'); // 현재 선택된 도구 ('pen' 또는 'eraser')
+            const penColor = ref('black'); // 펜 색상 ('black' 또는 'red')
+            const penWidth = ref(3); // 펜 굵기 (픽셀)
+            const eraserWidth = ref(10); // 지우개 굵기 (픽셀)
+
+            // 피드백 및 분석 상태
+            const feedback = ref(''); // AI 피드백 결과 (HTML 형식으로 저장됨)
+            // 'CSV 내보내기'를 위해 풀이 기록을 누적하는 배열
+            const analysisData = ref([]); 
+
+            // --- API 호출 관련 ---
+
+            // Gemini API 엔드포인트
+            const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
+
+            /**
+             * AI에게 5지선다형 객관식 문제를 JSON 형식으로 요청합니다.
+             * (새로운 문제 받기 버튼 클릭 시 호출됨)
+             */
+            async function getMathProblem() {
+                // 1. API 키 유효성 검사
+                if (!apiKey.value) {
+                    errorMessage.value = 'API 키를 입력해주세요.';
+                    return;
                 }
+                
+                // 2. 상태 초기화
+                isLoadingProblem.value = true;
+                errorMessage.value = '';
+                mathProblem.value = null; // [중요] 이전 문제 제거
+                feedback.value = ''; // 이전 피드백 제거
+                selectedOptionIndex.value = null; // 객관식 선택 초기화
+                clearCanvas(); // 캔버스 지우기
 
-                // mathProblem이 변경될 때마다 MathJax 렌더링 실행
-                watch(mathProblem, () => {
-                    renderMath('math-problem-display');
-                });
-
-                // feedback이 변경될 때마다 MathJax 렌더링 실행
-                watch(feedback, () => {
-                    renderMath('feedback-display');
-                });
-
-
-                /**
-                 * API 호출을 위한 fetch 함수 (지수 백오프 포함)
-                 */
-                async function fetchWithRetry(url, options, maxRetries = 3) {
-                    let attempt = 0;
-                    while (attempt < maxRetries) {
-                        try {
-                            const response = await fetch(url, options);
-                            if (!response.ok) {
-                                const errorData = await response.json();
-                                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error?.message || response.statusText}`);
-                            }
-                            return await response.json();
-                        } catch (err) {
-                            attempt++;
-                            if (attempt >= maxRetries) {
-                                throw err;
-                            }
-                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000; // 2s, 4s, 8s...
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                        }
-                    }
-                }
-
-                /**
-                 * 1. 수학 문제 받아오기
-                 */
-                async function getMathProblem() {
-                    if (!apiKey.value) {
-                        error.value = "API 키를 먼저 입력해주세요.";
-                        return;
-                    }
-                    isLoadingProblem.value = true;
-                    error.value = '';
-                    feedback.value = '';
-                    clearCanvas(); // 새 문제 받으면 캔버스 초기화
-                    canvasHeight.value = 400; // 캔버스 높이도 초기화
-
-                    // 사용자가 요청한 유형과 난이도를 바탕으로 프롬프트 생성
-                    const userPrompt = `고등학생 수준의 수학 문제를 하나 출제해 주세요.
-- 주제: ${problemType.value}
-- 난이도: ${difficultyLevel.value} (1=가장 쉬움, 5=가장 어려움)
-
-문제만 간결하게 제시해 주세요. (별다른 설명 없이 문제 자체만)
-**중요: 모든 수학 수식, 변수, 공식은 반드시 LaTeX 형식을 사용해 주세요. 예: $f(x) = x^2 + 1$, $$\int_{a}^{b} x \,dx$$**`;
-
-                    const payload = {
-                        contents: [{
-                            parts: [{
-                                text: userPrompt // 동적으로 생성된 프롬프트 사용
-                            }]
-                        }],
-                        systemInstruction: {
-                            parts: [{ text: "당신은 수학 교사입니다. 학생에게 풀 수학 문제를 출제합니다." }]
-                        },
-                    };
-
-                    try {
-                        const result = await fetchWithRetry(API_URL_BASE + apiKey.value, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-                        
-                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (text) {
-                            // v-html을 사용할 것이므로 기본 텍스트 래핑
-                            mathProblem.value = `<p class="text-lg text-gray-800 whitespace-pre-wrap">${text.trim()}</p>`;
-                        } else {
-                            throw new Error("AI로부터 유효한 응답을 받지 못했습니다. (문제 출제)");
-                        }
-                    } catch (err) {
-                        console.error("Error getting math problem:", err);
-                        error.value = `문제 출제 중 오류가 발생했습니다: ${err.message}`;
-                    } finally {
-                        isLoadingProblem.value = false;
-                    }
-                }
-
-                // --- 캔버스 로직 ---
-
-                // 캔버스 내 상대 좌표 계산
-                function getCanvasPosition(event) {
-                    const canvas = canvasRef.value;
-                    const rect = canvas.getBoundingClientRect();
-                    const scaleX = canvas.width / rect.width;
-                    const scaleY = canvas.height / rect.height;
-
-                    let clientX, clientY;
-                    if (event.touches && event.touches.length > 0) {
-                        clientX = event.touches[0].clientX;
-                        clientY = event.touches[0].clientY;
-                    } else {
-                        clientX = event.clientX;
-                        clientY = event.clientY;
-                    }
-
-                    return {
-                        x: (clientX - rect.left) * scaleX,
-                        y: (clientY - rect.top) * scaleY
-                    };
-                }
-
-                // 그리기 시작
-                function startDrawing(event) {
-                    if (!ctxRef.value) return;
-                    isDrawing.value = true;
-                    lastPos.value = getCanvasPosition(event);
-                    ctxRef.value.beginPath();
-                    ctxRef.value.moveTo(lastPos.value.x, lastPos.value.y);
-                }
-
-                // 그리기
-                function draw(event) {
-                    if (!isDrawing.value) return;
-                    const pos = getCanvasPosition(event);
-                    ctxRef.value.lineTo(pos.x, pos.y);
-                    ctxRef.value.stroke();
-                    lastPos.value = pos;
-                }
-
-                // 그리기 종료
-                function stopDrawing() {
-                    if (!isDrawing.value) return;
-                    isDrawing.value = false;
-                    ctxRef.value.closePath();
-                }
-
-                // 캔버스 도구 설정
-                function setTool(tool) {
-                    currentTool.value = tool;
-                    if (!ctxRef.value) return;
-
-                    if (tool === 'pen-black') {
-                        ctxRef.value.strokeStyle = 'black';
-                        ctxRef.value.lineWidth = 2;
-                        ctxRef.value.globalCompositeOperation = 'source-over';
-                    } else if (tool === 'pen-red') {
-                        ctxRef.value.strokeStyle = 'red';
-                        ctxRef.value.lineWidth = 2;
-                        ctxRef.value.globalCompositeOperation = 'source-over';
-                    } else if (tool === 'eraser') {
-                        ctxRef.value.strokeStyle = 'white'; // 배경색으로 지움
-                        ctxRef.value.lineWidth = 20;
-                        ctxRef.value.globalCompositeOperation = 'destination-out'; // 고급 지우개
-                    }
-                }
-
-                // 캔버스 지우기
-                function clearCanvas() {
-                    if (!ctxRef.value) return;
-                    ctxRef.value.clearRect(0, 0, canvasWidth.value, canvasHeight.value);
-                }
-
-                // 캔버스 높이 늘리기
-                async function increaseHeight() {
-                    if (!ctxRef.value || !canvasRef.value) return;
-
-                    // 1. 현재 이미지 데이터 백업
-                    const imgData = ctxRef.value.getImageData(0, 0, canvasWidth.value, canvasHeight.value);
-                    
-                    // 2. 캔버스 높이 늘리기
-                    canvasHeight.value += 200;
-
-                    // 3. DOM이 업데이트될 때까지 기다림
-                    await nextTick();
-
-                    // 4. 백업한 이미지 데이터 복원
-                    // 캔버스 컨텍스트가 리셋될 수 있으므로 스타일 다시 적용
-                    ctxRef.value.lineCap = 'round';
-                    ctxRef.value.lineJoin = 'round';
-                    setTool(currentTool.value); 
-                    ctxRef.value.putImageData(imgData, 0, 0);
-                }
-
-
-                /**
-                 * 3. 피드백 받기 (캔버스 이미지 분석)
-                 * "모름" 버그를 수정하기 위해 프롬프트를 대폭 수정
-                 */
-                async function getFeedback() {
-                    if (!apiKey.value) {
-                        error.value = "API 키를 먼저 입력해주세요.";
-                        return;
-                    }
-                    if (!canvasRef.value) {
-                        error.value = "캔버스가 준비되지 않았습니다.";
-                        return;
-                    }
-
-                    isLoadingFeedback.value = true;
-                    error.value = '';
-
-                    // 캔버스 데이터를 Base64로 변환 (PNG)
-                    const dataUrl = canvasRef.value.toDataURL("image/png");
-                    const base64Data = dataUrl.split(',')[1];
-
-                    if (!base64Data) {
-                         error.value = "캔버스 이미지 데이터를 읽을 수 없습니다.";
-                         isLoadingFeedback.value = false;
-                         return;
-                    }
-
-                    // *** "모름" 버그 수정을 위한 핵심 프롬프트 ***
-                    const feedbackPrompt = `
-[문제]:
-${mathProblem.value}
-
-[학생 풀이 이미지]:
-(이미지가 여기에 첨부됩니다)
-
-[요청]:
-당신은 학생의 필기 풀이를 분석하는 전문 수학 튜터입니다.
-**반드시 다음 3단계를 순서대로 엄격하게 수행하세요:**
-
-**1단계 (필기 인식):**
-- 학생의 필기 이미지에 어떤 글자나 수식이 쓰여있는지 정확히 인식합니다.
-- 예: "f(x) = 2x...", "모름", "포기", "..." 등
-
-**2단계 (상황 판단):**
-- 1단계에서 인식한 내용을 바탕으로 학생의 상태를 판단합니다.
-- **판단 A (풀이 시도 없음):** 만약 학생이 "모름", "포기" 등과 같이 문제를 풀지 않겠다는 의사를 밝혔거나, 캔버스가 거의 비어있거나 의미 없는 낙서만 있는 경우.
-- **판단 B (풀이 시도 있음):** 만약 학생이 문제와 관련된 수식이나 풀이 과정을 조금이라도 작성한 경우.
-
-**3단계 (피드백 제공):**
-- **(판단 A의 경우):**
-    - **절대로 긍정적인 점수나 "잘했다"는 칭찬을 하지 마세요.**
-    - 학생이 문제를 풀기 어려워한다는 것을 공감해 주세요.
-    - 점수를 매기지 말고(예: "점수: 0/5"), 이 문제를 풀기 위한 **핵심 힌트**나 시작 방법을 알려주세요.
-    - 예: "문제를 풀기 어려우셨군요. 이 문제는 '$f(g(x))$를 먼저 구하는 것이 핵심입니다. $g(x)$를 $f(x)$의 $x$ 자리에 대입해 보세요."
-
-- **(판단 B의 경우):**
-    - 학생의 필기 풀이 과정을 단계별로 분석하고 채점합니다.
-    - 점수를 매겨주세요. (예: "## 채점 결과: 3/5점")
-    - 잘한 부분은 칭찬하고, 틀린 부분은 명확하게 지적한 뒤 올바른 풀이 방법을 설명해주세요.
-
-**[중요 규칙]:**
-- 피드백에 포함되는 모든 수학 수식, 변수, 공식은 반드시 LaTeX 형식을 사용해 주세요. 예: $f(x) = x^2 + 1$
-- 항상 친절하고 격려하는 튜터의 말투를 사용하세요.
-`;
-
-                    const payload = {
-                        contents: [
-                            {
-                                parts: [
-                                    { text: "다음 수학 문제에 대한 학생의 필기 풀이입니다." },
-                                    {
-                                        inlineData: {
-                                            mimeType: "image/png",
-                                            data: base64Data
-                                        }
-                                    },
-                                    { text: feedbackPrompt } // 수정된 핵심 프롬프트 주입
-                                ]
-                            }
-                        ],
-                        systemInstruction: {
-                            parts: [{ text: "당신은 친절하고 전문적인 수학 튜터입니다. 학생의 필기 풀이를 채점하고 상세한 피드백을 제공합니다. 제공된 [요청]의 3단계 프로세스를 엄격하게 따라야 합니다." }]
-                        },
-                    };
-
-                    try {
-                        const result = await fetchWithRetry(API_URL_BASE + apiKey.value, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-
-                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (text) {
-                            // v-html을 사용할 것이므로 h3 태그와 p 태그를 직접 주입
-                            feedback.value = `<h3 class="text-xl font-semibold text-blue-800 mb-3">AI 튜터의 피드백:</h3>
-                                              <div class="text-lg text-gray-800 whitespace-pre-wrap">${text.trim()}</div>`; // p -> div로 변경 (p 내부에 h2 등이 오는 것을 방지)
-                        } else {
-                            // content가 없는 경우 (e.g., safety-settings 차단)
-                            const finishReason = result.candidates?.[0]?.finishReason;
-                            if (finishReason === 'SAFETY') {
-                                throw new Error("AI가 안전상의 이유로 응답을 거부했습니다. (이미지가 부적절하거나 정책 위반)");
-                            } else {
-                                throw new Error(`AI로부터 유효한 응답을 받지 못했습니다. (피드백). Reason: ${finishReason}`);
-                            }
-                        }
-                    } catch (err) {
-                        console.error("Error getting feedback:", err);
-                        error.value = `피드백 요청 중 오류가 발생했습니다: ${err.message}\n${err.stack.includes("503") ? "서버가 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요." : ""}`;
-                    } finally {
-                        isLoadingFeedback.value = false;
-                    }
-                }
-
-                return {
-                    apiKey,
-                    mathProblem,
-                    feedback,
-                    isLoadingProblem,
-                    isLoadingFeedback,
-                    error,
-                    getMathProblem,
-                    getFeedback,
-
-                    // 문제 출제 옵션
-                    problemType,
-                    difficultyLevel,
-
-                    // 캔버스
-                    canvasRef,
-                    canvasWidth,
-                    canvasHeight,
-                    currentTool,
-                    startDrawing,
-                    draw,
-                    stopDrawing,
-                    setTool,
-                    clearCanvas,
-                    increaseHeight
+                // 3. AI에게 보낼 시스템 지시어 (AI의 역할과 규칙 정의)
+                const systemInstruction = {
+                    parts: [{
+                        text: `당신은 유능한 한국어 수학 교사입니다.
+1. 사용자가 요청한 '성취 기준'과 '난이도'에 맞는 수학 문제를 출제해야 합니다.
+2. 문제는 반드시 LaTeX 수식을 포함해야 합니다. (예: $f(x) = x^2$)
+3. 문제는 5지선다형 객관식이어야 하며, 1개의 정답과 4개의 매력적인 오답을 포함해야 합니다.
+4. 모든 텍스트는 한국어로 작성해야 합니다.
+5. [중요] 문제 본문(problemText)은 문단 구분이 필요한 경우를 제외하고는, 불필요한 줄바꿈 없이 자연스러운 문장으로 생성해야 합니다.
+6. [중요] 5지선다형 보기는 수식이나 답 그 자체만 제시하세요. (예: '$x > 1$'). '명제:', '답:' 같은 불필요한 접두사를 붙이지 마세요.`
+                    }]
                 };
-            }
-        }).mount('#app');
-    </script>
 
+                // 4. AI에게 보낼 사용자 요청 (현재 선택된 값 기준)
+                const userQuery = {
+                    parts: [{
+                        text: `성취 기준: ${problemType.value}\n난이도: ${difficultyLevel.value} (1~5 스케일)`
+                    }]
+                };
+
+                // 5. API 요청 본문(payload) 구성 (JSON 응답 요청)
+                const payload = {
+                    contents: [userQuery],
+                    systemInstruction: systemInstruction,
+                    generationConfig: {
+                        responseMimeType: "application/json", // [중요] JSON 형식으로 응답 요청
+                        // AI가 반환해야 할 JSON 스키마를 명확하게 정의합니다.
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "problemText": { "type": "STRING", "description": "LaTeX를 포함한 문제 본문입니다. 불필요한 줄바꿈은 피하세요." },
+                                "options": {
+                                    "type": "ARRAY",
+                                    "description": "5개의 선택지. 각 선택지는 LaTeX를 포함할 수 있습니다.",
+                                    "items": { "type": "STRING", "description": "선택지 텍스트 또는 수식 그 자체. 접두사 금지." },
+                                    "minItems": 5, // 반드시 5개
+                                    "maxItems": 5
+                                },
+                                "answerIndex": { "type": "INTEGER", "description": "정답 선택지의 인덱스 (0~4)" },
+                                "answerExplanation": { "type": "STRING", "description": "정답에 대한 간략한 해설 (LaTeX 포함 가능)" }
+                            },
+                            required: ["problemText", "options", "answerIndex", "answerExplanation"] // 필수 속성
+                        }
+                    }
+                };
+
+                // 6. API 호출
+                try {
+                    // API 호출 (재시도 로직 포함)
+                    const response = await fetchWithRetry(API_URL + apiKey.value, payload);
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates[0].content) {
+                        // AI가 생성한 JSON 텍스트를 파싱
+                        const jsonText = result.candidates[0].content.parts[0].text;
+                        mathProblem.value = JSON.parse(jsonText); // 파싱된 JSON 객체를 상태에 저장
+                        
+                    } else {
+                        // API 에러 처리 (예: API 키 오류, 할당량 초과 등)
+                        throw new Error(result.error ? result.error.message : 'AI가 유효한 응답을 생성하지 못했습니다.');
+                    }
+                } catch (error) {
+                    console.error('Error getting math problem:', error);
+                    errorMessage.value = `문제 생성 중 오류가 발생했습니다: ${error.message}`;
+                } finally {
+                    isLoadingProblem.value = false; // 로딩 스피너 중지
+                }
+            }
+
+            /**
+             * AI에게 필기 이미지와 선택한 답을 보내고 피드백을 요청합니다.
+             * (피드백 받기 버튼 클릭 시 호출됨)
+             */
+            async function getFeedback() {
+                // 1. 유효성 검사
+                if (!apiKey.value || !mathProblem.value || !ctx.value) {
+                    errorMessage.value = '먼저 문제를 받거나 캔버스가 준비되었는지 확인해주세요.';
+                    return;
+                }
+                
+                // 2. 상태 초기화
+                isLoadingFeedback.value = true;
+                errorMessage.value = '';
+                feedback.value = ''; // 이전 피드백 제거
+
+                // 3. 캔버스 이미지를 Base64 데이터로 변환
+                const canvasImageBase64 = canvas.value.toDataURL('image/png').split(',')[1];
+                // 사용자가 선택한 답 (텍스트)
+                const selectedAnswer = selectedOptionIndex.value !== null ? mathProblem.value.options[selectedOptionIndex.value] : "선택 안함";
+
+                // 4. [중요] "모름" 버그를 잡기 위한 강력한 시스템 지시어
+                const systemInstruction = {
+                    parts: [{
+                        text: `당신은 학생의 풀이를 분석하는 엄격하고 친절한 한국어 수학 튜터입니다.
+제시된 문제, 학생이 선택한 객관식 답, 학생이 캔버스에 쓴 손글씨 풀이를 분석해야 합니다.
+
+**[채점 원칙]**
+1.  **[1단계: 손글씨 인식]** 먼저, 학생의 손글씨 이미지에 어떤 내용이 있는지 정확히 인식합니다. (예: "2x+1", "모름", "포기", "그림", "빈 칸" 등)
+2.  **[2단계: 상황 판단]**
+    * **Case A (풀이 없음):** 만약 학생이 '모름', '포기'라고 썼거나, 의미 없는 낙서를 했거나, 캔버스가 거의 비어있다면, **절대로 긍정적인 점수나 '잘했다'는 말을 해서는 안 됩니다.**
+    * **Case B (풀이 있음):** 만약 학생이 수학 풀이 과정을 작성했다면, 3단계 채점을 시작합니다.
+3.  **[3단계: 피드백 생성]**
+    * **Case A (풀이 없음) 응답:** "문제를 풀기 어려우셨군요." 또는 "답안이 작성되지 않았습니다."라고 말하고, **점수를 주지 마세요.** 대신 문제 풀이에 필요한 **핵심 힌트**를 제공하세요. (예: "이 문제는 $f(g(x))$를 먼저 계산해야 합니다.")
+    * **Case B (풀이 있음) 응답:**
+        1.  학생이 선택한 **객관식 답**이 정답(정답 인덱스: ${mathProblem.value.answerIndex})인지 먼저 확인하고 맞았는지 틀렸는지 언급하세요.
+        2.  학생의 **손글씨 풀이 과정**을 단계별로 분석하고, 논리적인 오류나 계산 실수를 찾아내세요.
+        3.  모든 것을 종합하여 **점수(예: 5/5점)**와 함께 상세하고 친절한 피드백을 주세요.
+        4.  모든 피드백에는 **LaTeX 수식**을 적극적으로 사용하세요.`
+                    }]
+                };
+
+                // 5. AI에게 보낼 내용 (멀티모달: 텍스트 + 이미지)
+                const contents = [
+                    {
+                        parts: [
+                            { text: `[문제]\n${mathProblem.value.problemText}` },
+                            { text: `[객관식 보기]\n${mathProblem.value.options.join('\n')}` },
+                            { text: `[정답]\n${mathProblem.value.answerIndex}번 (${mathProblem.value.options[mathProblem.value.answerIndex]})` },
+                            { text: `[학생이 선택한 답]\n${selectedOptionIndex.value !== null ? (selectedOptionIndex.value + '번 (' + selectedAnswer + ')') : '선택 안함'}` },
+                            { text: "\n[학생의 손글씨 풀이 이미지]:" },
+                            {
+                                inlineData: {
+                                    mimeType: "image/png",
+                                    data: canvasImageBase64
+                                }
+                            }
+                        ]
+                    }
+                ];
+
+                const payload = { contents, systemInstruction };
+
+                // 6. API 호출
+                try {
+                    const response = await fetchWithRetry(API_URL + apiKey.value, payload);
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates[0].content) {
+                        let feedbackText = result.candidates[0].content.parts[0].text;
+                        // AI 응답(마크다운)을 HTML로 변환 (줄바꿈, 굵은 글씨 등)
+                        feedbackText = feedbackText
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **Bold** -> <strong>Bold</strong>
+                            .replace(/\*(.*?)\*/g, '<em>$1</em>')       // *Italic* -> <em>Italic</em>
+                            .replace(/\n/g, '<br>');                      // Newline -> <br>
+                        feedback.value = feedbackText; // HTML 상태 업데이트
+
+                        // CSV 저장을 위해 데이터 누적
+                        saveAnalysisData(feedbackText);
+
+                    } else {
+                        throw new Error(result.error ? result.error.message : 'AI가 유효한 피드백을 생성하지 못했습니다.');
+                    }
+                } catch (error) {
+                    console.error('Error getting feedback:', error);
+                    errorMessage.value = `피드백 생성 중 오류가 발생했습니다: ${error.message}`;
+                } finally {
+                    isLoadingFeedback.value = false; // 로딩 스피너 중지
+                }
+            }
+
+            /**
+             * 분석용 데이터를 객체로 만들어 'analysisData' 배열에 저장합니다.
+             */
+            function saveAnalysisData(feedbackText) {
+                // 캔버스 이미지는 용량이 크므로, CSV 저장 시에는 제외됩니다. 
+                // (필요시 saveAnalysisData에서 canvasImageBase64를 제거하거나, 
+                // exportToCSV에서처럼 "IMAGE_REDACTED"로 처리)
+                
+                // 저장할 데이터 객체
+                const dataEntry = {
+                    timestamp: new Date().toISOString(), // 제출 시간
+                    problemType: problemType.value, // 문제 유형
+                    difficulty: difficultyLevel.value, // 난이도
+                    problemText: mathProblem.value.problemText, // 문제 텍스트
+                    options: JSON.stringify(mathProblem.value.options), // 보기 (JSON 문자열)
+                    answerIndex: mathProblem.value.answerIndex, // 정답 인덱스
+                    answerExplanation: mathProblem.value.answerExplanation, // 정답 해설
+                    selectedOptionIndex: selectedOptionIndex.value, // 학생 선택 인덱스
+                    selectedOptionText: selectedOptionIndex.value !== null ? mathProblem.value.options[selectedOptionIndex.value] : "N/A", // 학생 선택 텍스트
+                    // canvasImageBase64: '...DATA...', // (주석 처리) 용량이 크므로 기본적으로 제외
+                    aiFeedback: feedbackText.replace(/<br>/g, '\n').replace(/<[^>]+>/g, '') // 피드백 (HTML 태그 제거, 줄바꿈 유지)
+                };
+                analysisData.value.push(dataEntry); // 배열에 추가
+            }
+
+            /**
+             * 누적된 분석 데이터를 CSV 파일로 내보냅니다.
+             * (분석 데이터 내보내기 버튼 클릭 시 호출됨)
+             */
+            function exportToCSV() {
+                if (analysisData.value.length === 0) {
+                    errorMessage.value = '내보낼 데이터가 없습니다.'; 
+                    return;
+                }
+
+                const headers = Object.keys(analysisData.value[0]);
+                // \uFEFF: UTF-8 BOM (Excel에서 한글 깨짐 방지)
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
+                csvContent += headers.join(",") + "\r\n"; // 헤더 추가
+
+                analysisData.value.forEach(row => {
+                    const values = headers.map(header => {
+                        let value = row[header];
+                        
+                        // 쉼표(,)나 따옴표(")가 포함된 문자열 처리
+                        if (typeof value === 'string') {
+                            value = value.replace(/"/g, '""'); // 따옴표 이스케이프 (") -> ("")
+                            value = `"${value}"`; // 문자열 전체를 따옴표로 감싸기
+                        } else if (value === null || value === undefined) {
+                            value = '""'; // 빈 값 처리
+                        }
+                        return String(value); 
+                    });
+                    csvContent += values.join(",") + "\r\n"; // 행 추가
+                });
+
+                // 파일 다운로드 트리거
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "math_tutor_analysis.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            /**
+             * API 요청 재시도 로직 (Exponential Backoff)
+             * (API 요청이 몰릴 때 429, 5xx 에러 발생 시 잠시 후 다시 시도)
+             */
+            async function fetchWithRetry(url, payload, retries = 3) {
+                let attempt = 0;
+                while (attempt < retries) {
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        // 429 (Too Many Requests) 또는 5xx (Server Error)일 때 재시도
+                        if (!response.ok) {
+                            if (response.status === 429 || response.status >= 500) {
+                                // 재시도해야 하는 에러로 간주
+                                throw new Error(`Server responded with status ${response.status}`);
+                            }
+                            // 그 외 클라이언트 에러(400, 401 등)는 재시도 없이 반환 (JSON 파싱을 위해)
+                            return response; 
+                        }
+                        // 성공 시 응답 반환
+                        return response;
+                    } catch (error) {
+                        attempt++;
+                        if (attempt >= retries) {
+                            throw error; // 재시도 횟수 초과 시 에러 발생
+                        }
+                        // 지수 백오프: 2초, 4초, 8초... + 랜덤 지연
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            // --- 캔버스 관련 함수 ---
+
+            /**
+             * [수정] 캔버스 초기화 (컴포넌트 마운트 시)
+             */
+            function initializeCanvas() {
+                const canvasEl = canvas.value;
+                if (!canvasEl) {
+                    console.error("InitializeCanvas: 캔버스 요소를 찾을 수 없습니다.");
+                    return;
+                }
+
+                ctx.value = canvasEl.getContext('2d', { willReadFrequently: true }); // [개선] getImageData 성능 향상
+                if (!ctx.value) {
+                     console.error("InitializeCanvas: 2D 컨텍스트를 가져올 수 없습니다.");
+                    return;
+                }
+
+                // 반응형 캔버스 크기 설정
+                const dpi = window.devicePixelRatio || 1;
+                // [수정] w-full 클래스로 인해 계산된 실제 너비를 가져옴
+                const rect = canvasEl.getBoundingClientRect();
+                
+                canvasEl.width = rect.width * dpi;
+                
+                // [수정] CSS에서 설정된 높이(400px)를 가져옴
+                const styleHeight = parseInt(window.getComputedStyle(canvasEl).height, 10);
+                canvasEl.height = styleHeight * dpi;
+                // [수정] CSS 스타일 높이도 명시적으로 설정 (확장 대비)
+                canvasEl.style.height = `${styleHeight}px`;
+
+                // DPI 스케일링 (고해상도 디스플레이 대응)
+                ctx.value.scale(dpi, dpi); 
+
+                // 기본 그리기 설정
+                ctx.value.strokeStyle = penColor.value;
+                ctx.value.lineWidth = penWidth.value;
+                ctx.value.lineCap = 'round';
+                ctx.value.lineJoin = 'round';
+
+                // 캔버스 배경을 흰색으로 채우기
+                fillWhiteBackground();
+
+                // 이벤트 리스너 등록 (데스크톱)
+                canvasEl.addEventListener('mousedown', startDrawing);
+                canvasEl.addEventListener('mousemove', draw);
+                canvasEl.addEventListener('mouseup', stopDrawing);
+                canvasEl.addEventListener('mouseout', stopDrawing);
+
+                // 이벤트 리스너 등록 (모바일/태블릿)
+                canvasEl.addEventListener('touchstart', startDrawing);
+                canvasEl.addEventListener('touchmove', draw);
+                canvasEl.addEventListener('touchend', stopDrawing);
+            }
+
+            /**
+             * 캔버스 배경을 흰색으로 채웁니다.
+             */
+            function fillWhiteBackground() {
+                if (!ctx.value) return; 
+                // [수정] 필기 안되는 버그 수정:
+                // restore()가 스케일을 포함한 모든 컨텍스트를 복원하므로, 
+                // 여기서 save/restore를 사용하는 것이 더 안전합니다.
+                ctx.value.save();
+                ctx.value.setTransform(1, 0, 0, 1, 0, 0); // 스케일 리셋
+                ctx.value.fillStyle = 'white';
+                ctx.value.fillRect(0, 0, canvas.value.width, canvas.value.height); // 실제 픽셀 크기로 채우기
+                ctx.value.restore(); // 저장된 스케일(dpi) 복원
+            }
+
+            /**
+             * 그리기 시작 (이벤트 핸들러)
+             */
+            function startDrawing(e) {
+                if (!ctx.value) return;
+                e.preventDefault();
+                isDrawing.value = true;
+                const pos = getEventPosition(e); // 이벤트 좌표 계산
+                ctx.value.beginPath();
+                ctx.value.moveTo(pos.x, pos.y);
+            }
+
+            /**
+             * 그리기 (이벤트 핸들러)
+             */
+            function draw(e) {
+                if (!isDrawing.value || !ctx.value) return;
+                e.preventDefault();
+                const pos = getEventPosition(e);
+                ctx.value.lineTo(pos.x, pos.y);
+                ctx.value.stroke();
+            }
+
+            /**
+             * 그리기 중지 (이벤트 핸들러)
+             */
+            function stopDrawing() {
+                if (isDrawing.value && ctx.value) {
+                    ctx.value.closePath();
+                    isDrawing.value = false;
+                }
+            }
+
+            /**
+             * 이벤트(마우스/터치)에서 캔버스 상의 로컬 좌표를 가져옵니다.
+             * (DPI 스케일링이 적용된 컨텍스트가 아닌, 스타일 시트 기준 좌표)
+             */
+            function getEventPosition(e) {
+                const rect = canvas.value.getBoundingClientRect();
+                let x, y;
+
+                if (e.touches && e.touches.length > 0) {
+                    // 터치 이벤트
+                    x = e.touches[0].clientX - rect.left;
+                    y = e.touches[0].clientY - rect.top;
+                } else {
+                    // 마우스 이벤트
+                    x = e.clientX - rect.left;
+                    y = e.clientY - rect.top;
+                }
+                
+                return { x, y }; // 캔버스 좌상단 기준 좌표 (스타일 시트 기준)
+            }
+
+            /**
+             * 캔버스 전체 삭제
+             */
+            function clearCanvas() {
+                if (!ctx.value || !canvas.value) return;
+                ctx.value.save();
+                ctx.value.setTransform(1, 0, 0, 1, 0, 0); // 스케일 리셋
+                ctx.value.clearRect(0, 0, canvas.value.width, canvas.value.height); // 전체 삭제 (픽셀 기준)
+                ctx.value.restore(); // 스케일 복원
+                // [수정] 스케일 중복 적용 버그 수정. restore()가 스케일을 복원하므로 재적용 불필요.
+                fillWhiteBackground(); // 다시 흰색 배경으로
+            }
+
+            /**
+             * 캔버스 높이 확장 (기존 그림 유지)
+             * ('필기 영역 늘리기' 버튼 클릭 시 호출됨)
+             */
+            function extendCanvas() {
+                const canvasEl = canvas.value;
+                if (!ctx.value || !canvasEl) return;
+                
+                const dpi = window.devicePixelRatio || 1;
+                
+                // [수정] 캔버스의 *실제 픽셀 크기* (width/height)를 사용해야 합니다.
+                // 스타일 크기(getBoundingClientRect)가 아닌, dpi가 곱해진 크기입니다.
+                const currentPixelWidth = canvasEl.width;
+                const currentPixelHeight = canvasEl.height;
+
+                // [수정] IndexSizeError 방지: 캔버스 크기가 0이 아닌지 확인
+                if (currentPixelWidth <= 0 || currentPixelHeight <= 0) {
+                    console.error("extendCanvas: 캔버스 크기가 0이어서 이미지를 저장할 수 없습니다.", currentPixelWidth, currentPixelHeight);
+                    // 캔버스 크기를 강제로 재설정
+                    initializeCanvas();
+                    return; 
+                }
+                
+                // 1. 현재 캔버스 내용을 이미지로 저장 (실제 픽셀 크기 기준)
+                const imageData = ctx.value.getImageData(0, 0, currentPixelWidth, currentPixelHeight);
+                
+                // 2. 캔버스 높이 늘리기 (스타일 높이 변경)
+                const newHeight = parseInt(canvasEl.style.height, 10) + 200; // 200px 추가
+                canvasEl.style.height = `${newHeight}px`;
+                // 실제 픽셀 높이도 변경
+                canvasEl.height = newHeight * dpi;
+
+                // 3. DPI 스케일링 및 컨텍스트 설정 복원
+                ctx.value.scale(dpi, dpi);
+                // 현재 도구 설정(펜/지우개)을 다시 적용
+                setTool(currentTool.value, penColor.value); 
+                
+                // 4. 배경 다시 칠하기 및 이미지 복원
+                fillWhiteBackground();
+                // 저장했던 이미지 다시 그리기 (좌표 0,0)
+                ctx.value.putImageData(imageData, 0, 0);
+            }
+
+            /**
+             * 그리기 도구 설정 (펜 또는 지우개)
+             */
+            function setTool(tool, color) {
+                if (!ctx.value) return; 
+                currentTool.value = tool;
+                if (tool === 'pen') {
+                    penColor.value = color || penColor.value; // 색상 지정 또는 기존 색상 유지
+                    ctx.value.globalCompositeOperation = 'source-over'; // 그리기 모드
+                    ctx.value.strokeStyle = penColor.value;
+                    ctx.value.lineWidth = penWidth.value;
+                } else if (tool === 'eraser') {
+                    ctx.value.globalCompositeOperation = 'destination-out'; // 지우개 모드 (투명하게 만듦)
+                    ctx.value.lineWidth = eraserWidth.value;
+                }
+            }
+
+
+            // --- Vue 라이프사이클 및 감시자 (Watchers) ---
+
+            /**
+             * [수정] Vue 앱이 마운트된 후에 실행됩니다.
+             */
+            onMounted(() => {
+                // [수정] nextTick을 사용하여 DOM 렌더링(w-full 계산)이 완료된 후 캔버스를 초기화합니다.
+                // 이렇게 하면 캔버스 너비가 0이 되어 발생하는 'IndexSizeError'를 방지할 수 있습니다.
+                nextTick(initializeCanvas);
+                
+                document.addEventListener('MathJaxReady', () => {
+                    // MathJax 준비 완료 (필요시 추가 로직)
+                });
+            });
+
+            /**
+             * API 키가 변경될 때마다 localStorage에 저장합니다.
+             */
+            watch(apiKey, (newKey) => {
+                localStorage.setItem('geminiApiKey', newKey);
+            });
+
+            /**
+             * `mathProblem` 또는 `feedback` 상태가 변경될 때마다 (즉, 새 콘텐츠가 로드될 때마다)
+             * DOM이 업데이트된 후 MathJax를 실행하여 수식을 렌더링합니다.
+             */
+            watch([mathProblem, feedback], () => {
+                // nextTick: Vue가 DOM 변경을 완료한 후 콜백을 실행합니다.
+                nextTick(() => {
+                    if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+                        // MathJax에 새로 추가된 수식을 렌더링하도록 요청
+                        window.MathJax.typesetPromise().catch((err) => {
+                            console.error('MathJax 렌더링 오류:', err);
+                        });
+                    }
+                });
+            });
+
+            // 템플릿(HTML)에서 사용할 변수 및 함수 반환
+            return {
+                // 상태 (State)
+                apiKey,
+                isLoadingProblem,
+                isLoadingFeedback,
+                errorMessage,
+                problemType,
+                difficultyLevel,
+                mathProblem,
+                selectedOptionIndex,
+                canvas, // 캔버스 DOM 엘리먼트 (ref)
+                feedback,
+                currentTool,
+                penColor,
+                analysisData,
+
+                // 함수 (Methods)
+                getMathProblem,
+                getFeedback,
+                setTool,
+                clearCanvas,
+                extendCanvas,
+                exportToCSV
+            };
+        }
+    }).mount('#app'); // #app 엘리먼트에 Vue 앱을 마운트합니다.
+
+</script>
 </body>
 </html>
